@@ -32,22 +32,19 @@ for (site in sample_sites) {
   # Subset the ampvis2 object to only include data from the current site
   d_filtered <- amp_filter_samples(d_initial, SampleSite == site)
   # 
-  # # --- RCLR Transform ---
-  # # Apply the robust centered log-ratio transformation to the abundance data
-  # d_rclr <- rclr_transform(d_filtered)
-  # 
+  # --- RCLR Transform ---
+  # Apply the robust centered log-ratio transformation to the abundance data
+  d_rclr <- rclr_transform(d_filtered)
+  #
   # # --- Filter OTUs ---
-  # # As the data has been rclr transformed, we first filter the non-transformed data (`d_filtered`)
-  # # to get a list of OTUs to keep. Then we apply this filter to the transformed data (`d_rclr`).
-  # d_otu_filter <- filter_otus(d_filtered, filter_otus = 0.1)
-  # taxa_filter_vector <- as.vector(d_otu_filter$tax$OTU)
-  
+  # As the data has been rclr transformed, we first filter the non-transformed data (`d_filtered`) as the rclr_subset cannot use filter_otus()
+  # to get a list of OTUs to keep. Then we apply this filter to the transformed data (`d_rclr`) using the taxa_filter_vector.
+  d_otu_filter <- filter_otus(d_filtered, filter_otus = 0.1)
+  taxa_filter_vector <- as.vector(d_otu_filter$tax$OTU)
+
   # Subset the RCLR transformed data based on the taxa filter vector
-  # d_filtered_otus <- amp_subset_taxa(d_rclr, tax_vector = taxa_filter_vector)
-  
-  d_subset <- filter_otus(d_filtered, filter_otus = 0.1) 
-  
-  d_filtered_otus <- rclr_transform(d_subset)
+  d_filtered_otus <- amp_subset_taxa(d_rclr, tax_vector = taxa_filter_vector)
+
   
   # Check if any data remains after filtering to avoid errors
   if (nrow(d_filtered_otus$abund) > 0 && ncol(d_filtered_otus$abund) > 0) {
