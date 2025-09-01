@@ -3,10 +3,18 @@
 # run_elsa.sh
 #
 # This script runs the eLSA (Extended Local Similarity Analysis) on all
-# prepared data tables. It assumes you have an active conda environment
-# where the 'elsa' package is installed.
+# prepared data tables. It processes files serially, one by one, using the
+# lsa_compute command.
+#
+# It assumes you have an active conda environment where the 'elsa' package
+# is installed.
 #
 # --- Configuration ---
+
+# !!! IMPORTANT: PASTE THE FULL PATH TO lsa_compute HERE !!!
+# Find this path by running 'conda activate elsa_env' and then 'which lsa_compute'
+LSA_COMPUTE_EXECUTABLE="/home/simon/miniconda3/envs/elsa_env/bin/lsa_compute"
+
 
 # The script expects to be run from the root of your project directory.
 # `.` refers to the current directory.
@@ -19,7 +27,6 @@ INPUT_DIR="$PROJECT_ROOT/output/elsa_tables"
 OUTPUT_DIR="$PROJECT_ROOT/output/elsa_results"
 
 # --- eLSA Parameters ---
-# These need to be set based on your experimental design and goals.
 # -r: Number of replicates per time point. Your format is "tXr1", so you have 1.
 REPLICATES=1
 # -p: P-value estimation method. "perm" uses permutation.
@@ -27,9 +34,9 @@ PVALUE_METHOD="perm"
 # -x: Number of permutations for the p-value test.
 NUM_PERMUTATIONS=1000
 # -d: Maximum time delay to consider. This is a critical parameter.
-# For example, a delay of 5 means you're testing if an abundance change
-# in microbe X is followed by a change in microbe Y up to 5 time points later.
 MAX_DELAY=5
+# -n: The normalization method to apply.
+NORM_METHOD="percentileZ"
 
 # --- Script Execution ---
 
@@ -43,7 +50,7 @@ mkdir -p "$OUTPUT_DIR"
 echo "Results will be saved in: $OUTPUT_DIR"
 
 # Check if input directory is empty
-if [ -z "$(ls -A $INPUT_DIR)" ]; then
+if [ -z "$(ls -A "$INPUT_DIR")" ]; then
    echo "Error: Input directory '$INPUT_DIR' is empty. Did the R script run correctly?"
    exit 1
 fi
@@ -61,19 +68,17 @@ for input_file in "$INPUT_DIR"/*.tsv; do
     output_file="$OUTPUT_DIR/${base_name}.lsa"
 
     echo "----------------------------------------------------"
-    echo "Processing: $base_name"
-    echo "-> Found $num_timepoints time points."
-    echo "Input:      $input_file"
-    echo "Output:     $output_file"
+    echo "Processing: $base_name (Timepoints: $num_timepoints)"
 
-    # Run the lsa_compute command and redirect the output to the .lsa file
-    lsa_compute "$input_file" \
+    # Run the lsa_compute command with the correct syntax:
+    # lsa_compute <inputFile> <outputFile> [options]
+    "$LSA_COMPUTE_EXECUTABLE" "$input_file" "$output_file" \
         -r "$REPLICATES" \
         -p "$PVALUE_METHOD" \
         -d "$MAX_DELAY" \
         -s "$num_timepoints" \
         -x "$NUM_PERMUTATIONS" \
-        > "$output_file"
+        -n "$NORM_METHOD"
 
     echo "Finished processing $base_name"
 done
