@@ -13,8 +13,8 @@ source(here("R", "functions", "rclr_transform.R"))
 # Ensure the file path is correct and accessible from your R environment.
 # Using double backslashes (\\) or a single forward slash (/) is recommended in R for file paths.
 data_path <- here("data", "d_initial_Simon_subset.rds")
-d_initial <- readRDS(data_path) %>%
-  amp_filter_samples(SampleSite == "Aalborg W")
+d_initial <- readRDS(data_path) #%>%
+  #amp_filter_samples(SampleSite == "Aalborg W")
 
 # 2. Get unique sample sites from the metadata
 # This identifies the different locations to be processed individually.
