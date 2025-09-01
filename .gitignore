@@ -1,0 +1,8 @@
+# Ignore data and output folders
+data/
+output/
+
+# R-specific ignores
+.Rhistory
+.RData
+.Rproj.user/
