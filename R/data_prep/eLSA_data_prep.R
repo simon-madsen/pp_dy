@@ -86,4 +86,4 @@ for (site in sample_sites) {
 
 cat("\nScript finished. All files are in the '", output_folder, "' directory.\n")
 
-# i am the master
+
