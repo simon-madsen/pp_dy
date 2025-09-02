@@ -46,13 +46,13 @@ library(here)
 
 # --- Source your custom RCLR transformation function ---
 # Make sure the 'rclr_transform.R' file is in the same directory or provide the full path.
-source(here("functions", "rclr_transform.R"))
+source(here("R", "functions", "rclr_transform.R"))
 
 
 # --- 1. Load Data ---
 # Load the ampvis2 object directly from the .rds file
 amp_object_raw <- readRDS(here("data", "d_initial_Simon_subset.rds")) %>%
-  amp_filter_samples(SampleSite == "Aalborg E")
+  amp_filter_samples(SampleSite == "Aalborg W")
 ```
 
 # Analysis of Significant ASV Periodicities by Site
@@ -114,12 +114,12 @@ for (site in sample_sites) {
        return(NULL) # Return NULL for ASVs with no variance
      }
     
-    randlsp(
-      repeats = 80,
+    lsp(
+      #repeats = 80,
       x = asv_series,
       times = site_time_points,
       #from = 330,
-      to = 365,
+      to = 310,
       type = "period",
       ofac = 30,
       plot = FALSE,
@@ -231,6 +231,7 @@ if (length(all_significant_periods_list) > 0) {
 } else {
   all_significant_periods_df <- data.frame() # Create empty df if no peaks found
 }
+write.csv(all_significant_periods_df, file = here("data", "all_sig_periods.csv"))
 
 ```
 
