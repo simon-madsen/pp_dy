@@ -30,7 +30,7 @@ OUTPUT_DIR="$PROJECT_ROOT/output/elsa_results"
 # -r: Number of replicates per time point. Your format is "tXr1", so you have 1.
 REPLICATES=1
 # -p: P-value estimation method. "perm" uses permutation.
-PVALUE_METHOD="perm"
+PVALUE_METHOD="theo"
 # -x: Number of permutations for the p-value test.
 NUM_PERMUTATIONS=1000
 # -d: Maximum time delay to consider. This is a critical parameter.
@@ -55,11 +55,11 @@ if [ -z "$(ls -A "$INPUT_DIR")" ]; then
    exit 1
 fi
 
-# Loop through every .tsv file in the input directory
-for input_file in "$INPUT_DIR"/*.tsv; do
+# Loop through every .txt file in the input directory
+for input_file in "$INPUT_DIR"/*.txt; do
 
     # Get the base name of the file (e.g., "Aalborg_W_rclr_abund")
-    base_name=$(basename "$input_file" .tsv)
+    base_name=$(basename "$input_file" .txt)
 
     # Get the number of time points (-s) by counting columns in the header and subtracting the first (#OTU_ID) column.
     num_timepoints=$(head -n 1 "$input_file" | awk -F'\t' '{print NF-1}')
@@ -77,7 +77,6 @@ for input_file in "$INPUT_DIR"/*.tsv; do
         -p "$PVALUE_METHOD" \
         -d "$MAX_DELAY" \
         -s "$num_timepoints" \
-        -x "$NUM_PERMUTATIONS" \
         -n "$NORM_METHOD"
 
     echo "Finished processing $base_name"
