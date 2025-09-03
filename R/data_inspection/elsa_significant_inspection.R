@@ -9,12 +9,15 @@ library(ggplot2)
 
 # Read and filter the main dataframe 'd' from the .lsa file
 d <- read_tsv(here("output", "elsa_results", "Aalborg_W_rclr_abund.lsa")) %>%
-  filter(Delay != 0,
-         Len >= 10,
-         Q <= 0.05,
-         (Qpcc >= 0.05 | Qscc >= 0.05),
-         Qspcc <= 0.05,
-         Qsscc <= 0.05)
+  filter(Q <= 0.05,
+         # Delay != 0,
+         # LS >= 0,
+         # SPCC > PCC,
+         # SSCC > SCC,
+         # SSCC > 0.8,
+  )
+d$diffPCC <- d$SPCC - d$PCC
+d$diffSCC <- d$SSCC - d$SCC
 
 # Read the periods dataframe from the .csv file
 periods <- read.csv(here("data", "all_sig_periods.csv")) %>%
@@ -46,6 +49,7 @@ print(paste("Found", nrow(matching_pairs_df), "unique ASV pairs with similar per
 d_initial <- readRDS(here("data", "d_initial_Simon_subset.rds"))%>%
   amp_filter_samples(SampleSite == "Aalborg W")
 
+d_tax <- d_initial$tax
 # 2. Source the rclr_transform function
 source(here("R", "functions", "rclr_transform.R"))
 
