@@ -51,8 +51,8 @@ source(here("R", "functions", "rclr_transform.R"))
 
 # --- 1. Load Data ---
 # Load the ampvis2 object directly from the .rds file
-amp_object_raw <- readRDS(here("data", "d_initial_Simon_subset.rds")) %>%
-  amp_filter_samples(SampleSite == "Esbjerg W")
+amp_object_raw <- readRDS(here("data", "d_initial_Simon_subset.rds")) #%>%
+  #amp_filter_samples(SampleSite == "Esbjerg W")
 ```
 
 # Analysis of Significant ASV Periodicities by Site
@@ -119,7 +119,7 @@ for (site in sample_sites) {
       x = asv_series,
       times = site_time_points,
       #from = 330,
-      to = 310,
+      to = 360,
       type = "period",
       ofac = 30,
       plot = FALSE,
