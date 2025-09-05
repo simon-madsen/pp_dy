@@ -1,84 +1,68 @@
 # Load necessary libraries
+# Make sure you have these installed: install.packages(c("here", "readr", "dplyr", "purrr"))
+library(here)
 library(readr)
 library(dplyr)
-library(here)
-library(ampvis2)
-library(ggplot2)
+library(purrr)
 
-# --- Part 1: Identifying the Matching Pairs ---
+# 1. Define the path to your eLSA result files
+results_path <- here("output", "elsa_results")
 
-# Read and filter the main dataframe 'd' from the .lsa file
-d <- read_tsv(here("output", "elsa_results", "Aalborg_W_rclr_abund.lsa")) %>%
-  filter(Q <= 0.05,
-         # Delay != 0,
-         # LS >= 0,
-         # SPCC > PCC,
-         # SSCC > SCC,
-         # SSCC > 0.8,
-  )
-d$diffPCC <- d$SPCC - d$PCC
-d$diffSCC <- d$SSCC - d$SCC
+# 2. Get a list of all files ending with .lsa
+all_lsa_files <- list.files(
+  path = results_path,
+  pattern = "\\.lsa$", # This gets ALL files ending in .lsa
+  full.names = TRUE
+)
 
-# Read the periods dataframe from the .csv file
-periods <- read.csv(here("data", "all_sig_periods.csv")) %>%
-  filter(Period <= max(Period)-1 )
+norm_off <- FALSE # TRUE = Load norm_off.lsa files
 
-# Join 'd' with periods for both ASV X and ASV Y to create all combinations
-d_with_all_period_combinations <- d %>%
-  left_join(periods %>% select(asv, Period), by = c("X" = "asv")) %>%
-  rename(Period_X = Period) %>%
-  left_join(periods %>% select(asv, Period), by = c("Y" = "asv")) %>%
-  rename(Period_Y = Period)
+# --- NEW: Exclude the norm_off files ---
+# From the full list, remove any files that end with "norm_off.lsa"
+file_list <- grep("norm_off\\.lsa$", all_lsa_files, value = TRUE, invert = ifelse(norm_off == FALSE, TRUE, FALSE))
 
-# Filter these combinations based on the 1% difference criteria
-d_filtered <- d_with_all_period_combinations %>%
-  filter(!is.na(Period_X) & !is.na(Period_Y)) %>%
-  filter(abs(Period_X - Period_Y) < (0.02 * Period_X))
+# 3. Loop over the filtered file list and read each one
+# This part remains the same; it will now operate on the corrected file list.
+all_lsa_data <- map_dfr(file_list, ~{
+  # Extract the sample site name from the file path
+  sample_site <- basename(.x) %>%
+    gsub(ifelse(norm_off == FALSE, "\\_rclr_abund.lsa$", "\\_rclr_abund_norm_off.lsa$"), "", .) # A more general way to clean the name
+  
+  # Read the .lsa file
+  read_tsv(.x, col_types = cols(.default = "c")) %>%
+    mutate(
+      SampleSite = sample_site,
+      .before = 1
+    ) %>%
+    filter(Delay != 0, 
+           Q <= 0.01)
+})
 
-# --- NEW: Create a dataframe of unique matching pairs ---
-# This dataframe will have two columns, X and Y, for easy iteration.
-matching_pairs_df <- d_filtered %>%
-  select(X, Y) %>%
-  distinct()
+# 4. Safely convert columns to numeric (error-proof method)
+expected_numeric_cols <- c("LS", "Delay", "Q", "P", "PCC", "SCC", "SPCC", "SSCC")
+cols_to_convert <- intersect(expected_numeric_cols, colnames(all_lsa_data))
 
-print(paste("Found", nrow(matching_pairs_df), "unique ASV pairs with similar periods."))
-
-# --- Part 2: Time Series Plotting with ampvis2 ---
-
-# 1. Load the initial abundance data
-d_initial <- readRDS(here("data", "d_initial_Simon_subset.rds"))%>%
-  amp_filter_samples(SampleSite == "Aalborg W")
-
-d_tax <- d_initial$tax
-# 2. Source the rclr_transform function
-source(here("R", "functions", "rclr_transform.R"))
-
-d_rclr <- rclr_transform(d_initial)
-
-# Filter non-transformed data to get a list of ASVs to keep
-#d_otu_filter <- filter_otus(d_initial, filter_otus = 0.3)
-#taxa_filter_vector <- as.vector(d_otu_filter$tax$OTU)
-
-# Subset the RCLR transformed data
-#d_processed <- amp_subset_taxa(d_rclr, tax_vector = taxa_filter_vector)
-
-# create timeseries plot with amp_timerseries()
-
-for (i in 1:2) {
-  row <- matching_pairs_df[i,]
-  p<- amp_time_series(d_rclr,
-                  time_variable = "SampleDate",
-                  tax_show = c(row[1], row[2]),
-                  normalise = FALSE#,
-                  #tax_aggregate = "Species"
-                  ) 
-  show(p)
+if (length(cols_to_convert) > 0) {
+  all_lsa_data <- all_lsa_data %>%
+    mutate(across(
+      all_of(cols_to_convert),
+      as.numeric
+    ))
 }
 
-unique_taxa <- as.data.frame(unique(matching_pairs_df))
+# 5. Final inspection
+print(paste("Successfully combined", length(file_list), "files (after excluding 'norm_off' files)."))
+print(paste("The final data frame has", nrow(all_lsa_data), "rows and", ncol(all_lsa_data), "columns."))
+print("Columns converted to numeric:")
+print(cols_to_convert)
 
-unique_taxa_vector <- c(as.vector(unique_taxa[,1]), as.vector(unique_taxa[,2]))
+# Display the first few rows of the result
+sig_interactions_df <- all_lsa_data %>%
+  group_by(SampleSite) %>%
+  summarise(interactions = n()) %>%
+  mutate(sum = sum(interactions))
 
-d_processed <- amp_subset_taxa(d_rclr, tax_vector = unique_taxa_vector)
+head(sig_interactions_df)
 
-species_names <- d_processed$tax$Species
+# Optional: Save the combined data frame to a file
+# write_csv(all_lsa_data, here("output", "combined_lsa_results_filtered.csv"))
