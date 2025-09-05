@@ -29,7 +29,7 @@ for (site in sample_sites) {
       mutate(
         days_from_start = as.numeric(difftime(values, min(values), units = "days")),
         diff_from_prior = as.numeric(difftime(values, lag(values), units = "days")),
-        is_seven_days = ifelse(!is.na(diff_from_prior) & diff_from_prior <= 7, "Yes", "No")
+        is_seven_days = ifelse(!is.na(diff_from_prior) & diff_from_prior == 7, "Yes", "No")
       )
     
     # Calculate the ratio
@@ -78,3 +78,8 @@ ggsave(
   here("output", "weekly_sampling_subplot.jpg"),
   dpi = 300
 )
+
+plot_data_grouped <- plot_data %>%
+  group_by(SampleSite) %>%
+  filter(diff_from_prior == 7) %>%
+  summarise(count = n())
