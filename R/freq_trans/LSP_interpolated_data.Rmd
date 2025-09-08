@@ -1,0 +1,332 @@
+---
+title: "Distribution of Significant Periodicities by Wastewater Treatment Plant (Parallel)"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: journal
+output_dir: "output"
+---
+
+```{r setup, include=FALSE}
+# This chunk runs first to set up the environment. It will not be shown in the final HTML file.
+
+# # --- 0. Install and Load Required Packages ---
+# if (!require("lomb", quietly = TRUE)) {
+#   install.packages("lomb")
+# }
+# if (!require("rmarkdown", quietly = TRUE)) {
+#   install.packages("rmarkdown")
+# }
+# if (!require("ggplot2", quietly = TRUE)) {
+#   install.packages("ggplot2")
+# }
+# if (!require("ampvis2", quietly = TRUE)) {
+#   # install.packages("devtools")
+#   # devtools::install_github("kasperskytte/ampvis2")
+# }
+# # Packages for parallel processing
+# if (!require("foreach", quietly = TRUE)) {
+#   install.packages("foreach")
+# }
+# if (!require("doParallel", quietly = TRUE)) {
+#   install.packages("doParallel")
+# }
+# # Package for peak finding
+# if (!require("pracma", quietly = TRUE)) {
+#   install.packages("pracma")
+# }
+library(lomb)
+library(ggplot2)
+library(ampvis2)
+library(foreach)
+library(doParallel)
+library(pracma)
+library(here)
+
+# --- Source your custom RCLR transformation function ---
+# Make sure the 'rclr_transform.R' file is in the same directory or provide the full path.
+source(here("R", "functions", "rclr_transform.R"))
+
+
+# --- 1. Load Data ---
+# Load the ampvis2 object directly from the .rds file
+#amp_object_raw <- readRDS(here("data", "d_initial_Simon_subset.rds")) %>%
+  #amp_filter_samples(SampleSite == "Aalborg W")
+
+otu_table <- read_tsv(here("data", "interpolated_abundance_tables", "Aalborg W_abundance_table.tsv"))
+
+amp_object_raw <- amp_load(
+  otutable = otu_table
+) %>%
+  filter_otus(filter_otus = 0.1)
+amp_object_raw$metadata$SampleDate <- as.numeric(amp_object_raw$metadata$SampleID)
+
+amp_object_raw$metadata$SampleSite <- "Aalborg W"
+
+amp_object_initial <- readRDS(here("data", "d_initial_Simon_subset.rds")) %>%
+  amp_filter_samples(SampleSite == "Aalborg W") %>%
+  filter_otus(filter_otus = 0.1)
+
+filter <- amp_object_initial$tax$OTU
+
+amp_object_raw <- amp_subset_taxa(amp_object_raw,tax_vector = filter)
+
+
+```
+
+# Analysis of Significant ASV Periodicities by Site
+
+This report identifies all statistically significant periodic components (p < 0.05) for ASVs from different wastewater treatment plants (WWTPs). For each site, the data is first subset and then RCLR-transformed before analysis. The distribution of these periodicities is then visualized in a faceted histogram, allowing for comparison between sites. **This version of the script uses parallel processing to speed up the analysis.**
+
+```{r lsp_and_peak_finding, echo=FALSE, message=FALSE, warning=FALSE}
+# This chunk performs the LSP analysis for each site and finds all significant peaks.
+
+# --- Setup Parallel Backend ---
+# Use one less than the total number of cores to leave resources for the OS.
+cores <- detectCores()
+cl <- makeCluster(cores - 1)
+registerDoParallel(cl)
+
+# Get the unique sample sites from the metadata
+sample_sites <- unique(amp_object_raw$metadata$SampleSite)
+
+# Create empty lists to store results
+all_significant_periods_list <- list()
+total_asvs_per_site <- list()
+periodic_asvs_per_site <- list() # New list for periodic ASVs
+harmonic_periods_removed <- list() # New list to store info on removed harmonics
+
+# Loop through each sample site
+for (site in sample_sites) {
+  print(site)
+  # --- Filter data for the current site using the amp_filter_samples function ---
+  site_amp_object_raw <- amp_filter_samples(amp_object_raw, SampleSite == site)
+  
+  site_amp_object_rclr <- site_amp_object_raw
+  
+  # Extract the transposed abundance matrix for LSP
+  site_asv_matrix <- t(site_amp_object_rclr$abund)
+  
+  # Get the time points and convert from Date format to numeric for the lsp function
+  site_time_points <- as.numeric(site_amp_object_rclr$metadata$SampleDate -   min(site_amp_object_rclr$metadata$SampleDate))
+  
+    
+  # --- Perform LSP for the current site using a PARALLEL loop ---
+  site_lsp_results_unnamed <- foreach(
+    asv_name = colnames(site_asv_matrix), 
+    .packages = "lomb" # Make sure the lomb package is available to each worker
+  ) %dopar% {
+    asv_series <- site_asv_matrix[, asv_name]
+    
+    # Skip ASVs with no variance at this site
+     if (var(asv_series, na.rm = TRUE) == 0) {
+       return(NULL) # Return NULL for ASVs with no variance
+     }
+    
+    lsp(
+      #repeats = 80,
+      x = asv_series,
+      times = site_time_points,
+      #from = 330,
+      to = 360,
+      type = "period",
+      ofac = 30,
+      plot = FALSE,
+      alpha = 0.05
+    )
+  }
+  
+  # Name the list elements and remove any NULL results
+  names(site_lsp_results_unnamed) <- colnames(site_asv_matrix)
+  site_lsp_results <- site_lsp_results_unnamed[!sapply(site_lsp_results_unnamed, is.null)]
+  
+  # --- Identify all significant peaks AND periodic ASVs for the current site ---
+  temp_peak_list <- list()
+  site_periodic_asvs <- c() # Temp vector for this site's periodic ASVs
+  
+  for (asv_name in names(site_lsp_results)) {
+    lsp_result <- site_lsp_results[[asv_name]]
+    
+    # Check if the ASV is periodic (p-value < 0.05)
+    if (lsp_result$p.value < 0.05) {
+      site_periodic_asvs <- c(site_periodic_asvs, asv_name)
+    }
+    
+    # Get power, periods, and significance level for peak finding
+    power <- lsp_result$power
+    periods <- lsp_result$scanned
+    significance_threshold <- lsp_result$sig.level
+    
+    # --- Peak Finding and Harmonic Filtering Logic ---
+    
+    # 1. Find all potential peaks (internal, first, and last points)
+    peaks <- pracma::findpeaks(power)
+    candidate_indices <- c()
+    if (!is.null(peaks)) {
+      candidate_indices <- peaks[, 2]
+    }
+    if (power[1] > power[2]) {
+      candidate_indices <- c(candidate_indices, 1)
+    }
+    n <- length(power)
+    if (power[n] > power[n - 1]) {
+      candidate_indices <- c(candidate_indices, n)
+    }
+    
+    # 2. Filter for significance
+    significant_peak_indices <- unique(candidate_indices[power[candidate_indices] > significance_threshold])
+    
+    if (length(significant_peak_indices) > 0) {
+      periods_for_this_asv <- periods[significant_peak_indices]
+      periods_to_store <- periods_for_this_asv
+      
+      # 3. Check for and remove harmonics if multiple significant peaks are found
+      if (length(periods_for_this_asv) > 1) {
+        sorted_periods <- sort(periods_for_this_asv)
+        fundamental <- sorted_periods[1]
+        harmonics_to_remove <- c()
+        
+        # Check other periods against the fundamental
+        for (p in sorted_periods[-1]) {
+          ratio <- p / fundamental
+          # Check if the period is within 1.5 days of an integer multiple
+          if (abs(p - round(ratio) * fundamental) <= 1.5) {
+            harmonics_to_remove <- c(harmonics_to_remove, p)
+            
+            # Store info about the removed harmonic
+            harmonic_info <- data.frame(
+              SampleSite = site,
+              asv = asv_name,
+              Fundamental_Period = fundamental,
+              Removed_Harmonic = p,
+              Multiple = round(ratio)
+            )
+            harmonic_periods_removed <- append(harmonic_periods_removed, list(harmonic_info))
+          }
+        }
+        
+        # Filter out the identified harmonics
+        periods_to_store <- setdiff(periods_to_store, harmonics_to_remove)
+      }
+      
+      # 4. Finalize and store results
+      if (length(periods_to_store) > 0) {
+        temp_peak_list[[asv_name]] <- data.frame(
+          Period = periods_to_store,
+          asv = asv_name
+        )
+      }
+    }
+  }
+  
+  # Store the list of periodic ASVs for the site
+  periodic_asvs_per_site[[site]] <- site_periodic_asvs
+  
+  # If significant periods were found, combine them and add to the main list
+  if (length(temp_peak_list) > 0) {
+    site_significant_df <- do.call(rbind, temp_peak_list)
+    site_significant_df$SampleSite <- site
+    all_significant_periods_list[[site]] <- site_significant_df
+  }
+}
+
+# --- Stop the Parallel Backend ---
+stopCluster(cl)
+registerDoSEQ() # Register the sequential backend again
+
+# Combine the list of data frames into one single data frame for plotting
+if (length(all_significant_periods_list) > 0) {
+  all_significant_periods_df <- do.call(rbind, all_significant_periods_list)
+} else {
+  all_significant_periods_df <- data.frame() # Create empty df if no peaks found
+}
+write.csv(all_significant_periods_df, file = here("data", "all_sig_periods.csv"))
+
+```
+
+## Distribution of Significant Periods by Sample Site
+
+The following histograms display the frequencies of all statistically significant periods found, separated by `SampleSite`. This allows for a direct comparison of the dominant cycles present in each WWTP.
+
+```{r histogram_plot, echo=FALSE, fig.width=12, fig.height=8}
+# This chunk creates and displays the final faceted histogram plot.
+
+if (nrow(all_significant_periods_df) > 0) {
+  
+  # Generate the faceted histogram
+  p <- ggplot(all_significant_periods_df, aes(x = Period)) +
+    geom_histogram(binwidth = 20, fill = "steelblue", color = "black") +
+    facet_wrap(~ SampleSite, scales = "free_y") + # Facet by sample site
+    labs(
+      title = "Distribution of Significant Periodicities Across All ASVs by Site",
+      x = "Period (days)",
+      y = "Number of Significant Peaks"
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 16, hjust = 0.5),
+      axis.title = element_text(size = 12),
+      axis.text = element_text(size = 10),
+      strip.text = element_text(size = 12, face = "bold") # Make facet titles stand out
+    )
+  # Step 1: Build the plot data to extract the bin edge locations
+  plot_build <- ggplot_build(p)
+  bin_edges <- unique(c(plot_build$data[[1]]$xmin, plot_build$data[[1]]$xmax))
+
+  # Step 2: Add a scale layer to the original plot using the bin edges as breaks
+  p_with_ticks <- p + scale_x_continuous(breaks = bin_edges)
+
+  # Print the final plot
+  print(p_with_ticks)
+  
+  # Also print a summary of the findings
+  cat(paste("\n\nFound a total of", nrow(all_significant_periods_df), "significant periodic components across all sites after harmonic filtering."))
+  
+} else {
+  cat("No statistically significant periodicities were found in any ASVs with the given settings.")
+}
+
+# Print a summary for each site, including the ratio of periodic ASVs
+for (site_name in names(all_significant_periods_list)){
+  site_df <- all_significant_periods_list[[site_name]]
+  num_significant_asvs <- length(unique(site_df$asv))
+  total_asvs <- total_asvs_per_site[[site_name]]
+  ratio <- num_significant_asvs / total_asvs
+  
+  cat(paste("\nSite:", site_name,
+            ": peaks =", nrow(site_df), 
+            ", Unique periodic asvs =", num_significant_asvs,
+            ", Total asvs after filter =", total_asvs,
+            ", Ratio =", round(ratio, 3)))
+}
+
+# Print the list of periodic ASVs for each site
+cat("\n\n--- Periodic ASVs (p < 0.05) by Site ---")
+for (site_name in names(periodic_asvs_per_site)) {
+  asv_list <- periodic_asvs_per_site[[site_name]]
+  cat(paste0("\n\nSite: ", site_name, " (", length(asv_list), " periodic ASVs)"))
+  # The following line is commented out to avoid printing a very long list in the report.
+  # You can uncomment it if you want to see all the names.
+  # cat(paste0("\n", paste(asv_list, collapse = ", ")))
+}
+
+# Print the list of removed harmonic periods
+cat("\n\n--- Harmonics Detected and Removed ---")
+if (length(harmonic_periods_removed) > 0) {
+  harmonics_df <- do.call(rbind, harmonic_periods_removed)
+  for (s in unique(harmonics_df$SampleSite)) {
+      cat(paste0("\n\nSite: ", s))
+      site_harmonics <- harmonics_df[harmonics_df$SampleSite == s, ]
+      for (i in 1:nrow(site_harmonics)) {
+          row <- site_harmonics[i, ]
+          cat(paste0("\n  - ASV: ", row$asv, 
+                     " | Fundamental: ", round(row$Fundamental_Period, 1), 
+                     " days | Removed Harmonic: ", round(row$Removed_Harmonic, 1), 
+                     " days (approx. ", row$Multiple, "x)"))
+      }
+  }
+} else {
+    cat("\nNo harmonic periods were detected and removed.")
+}
+
