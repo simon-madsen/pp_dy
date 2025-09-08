@@ -11,31 +11,31 @@ output_dir: "output"
 ```{r setup, include=FALSE}
 # This chunk runs first to set up the environment. It will not be shown in the final HTML file.
 
-# --- 0. Install and Load Required Packages ---
-if (!require("lomb", quietly = TRUE)) {
-  install.packages("lomb")
-}
-if (!require("rmarkdown", quietly = TRUE)) {
-  install.packages("rmarkdown")
-}
-if (!require("ggplot2", quietly = TRUE)) {
-  install.packages("ggplot2")
-}
-if (!require("ampvis2", quietly = TRUE)) {
-  # install.packages("devtools")
-  # devtools::install_github("kasperskytte/ampvis2")
-}
-# Packages for parallel processing
-if (!require("foreach", quietly = TRUE)) {
-  install.packages("foreach")
-}
-if (!require("doParallel", quietly = TRUE)) {
-  install.packages("doParallel")
-}
-# Package for peak finding
-if (!require("pracma", quietly = TRUE)) {
-  install.packages("pracma")
-}
+# # --- 0. Install and Load Required Packages ---
+# if (!require("lomb", quietly = TRUE)) {
+#   install.packages("lomb")
+# }
+# if (!require("rmarkdown", quietly = TRUE)) {
+#   install.packages("rmarkdown")
+# }
+# if (!require("ggplot2", quietly = TRUE)) {
+#   install.packages("ggplot2")
+# }
+# if (!require("ampvis2", quietly = TRUE)) {
+#   # install.packages("devtools")
+#   # devtools::install_github("kasperskytte/ampvis2")
+# }
+# # Packages for parallel processing
+# if (!require("foreach", quietly = TRUE)) {
+#   install.packages("foreach")
+# }
+# if (!require("doParallel", quietly = TRUE)) {
+#   install.packages("doParallel")
+# }
+# # Package for peak finding
+# if (!require("pracma", quietly = TRUE)) {
+#   install.packages("pracma")
+# }
 library(lomb)
 library(ggplot2)
 library(ampvis2)
@@ -51,8 +51,27 @@ source(here("R", "functions", "rclr_transform.R"))
 
 # --- 1. Load Data ---
 # Load the ampvis2 object directly from the .rds file
-amp_object_raw <- readRDS(here("data", "d_initial_Simon_subset.rds")) #%>%
-  #amp_filter_samples(SampleSite == "Esbjerg W")
+amp_object_raw <- readRDS(here("data", "d_initial_Simon_subset.rds")) %>%
+  amp_filter_samples(SampleSite == "Aalborg W")
+
+# otu_table <- read_tsv(here("data", "interpolated_abundance_tables", "Aalborg W_abundance_table.tsv"))
+# 
+# amp_object_raw <- amp_load(
+#   otutable = otu_table
+# )
+# amp_object_raw$metadata$SampleDate <- as.numeric(amp_object_raw$metadata$SampleID)
+# 
+# amp_object_raw$metadata$SampleSite <- "Randers"
+# 
+# amp_object_initial <- readRDS(here("data", "d_initial_Simon_subset.rds")) %>%
+#   amp_filter_samples(SampleSite == "Aalborg W") %>%
+#   filter_otus(filter_otus = 0.1)
+# 
+# filter <- amp_object_initial$tax$OTU
+# 
+# amp_object_raw <- amp_subset_taxa(amp_object_raw,tax_vector = filter)
+
+
 ```
 
 # Analysis of Significant ASV Periodicities by Site
