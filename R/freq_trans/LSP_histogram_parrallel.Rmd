@@ -138,7 +138,7 @@ for (site in sample_sites) {
       x = asv_series,
       times = site_time_points,
       #from = 330,
-      to = 360,
+      to = 370,
       type = "period",
       ofac = 30,
       plot = FALSE,
