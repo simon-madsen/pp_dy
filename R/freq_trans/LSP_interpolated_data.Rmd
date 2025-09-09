@@ -54,24 +54,30 @@ source(here("R", "functions", "rclr_transform.R"))
 #amp_object_raw <- readRDS(here("data", "d_initial_Simon_subset.rds")) %>%
   #amp_filter_samples(SampleSite == "Aalborg W")
 
-otu_table <- read_tsv(here("data", "interpolated_abundance_tables", "Aalborg W_abundance_table.tsv"))
+otu_table <- read_tsv(here("data", "interpolated_abundance_tables", "Aalborg W_abundance_table.tsv")) 
+
+otu_table[is.na(otu_table)] <- 0
+
 
 amp_object_raw <- amp_load(
-  otutable = otu_table
+  otutable = otu_table[, -c(2:52, (ncol(otu_table) - 52):ncol(otu_table))]
 ) %>%
+  normaliseTo100() %>%
   filter_otus(filter_otus = 0.1)
+
 amp_object_raw$metadata$SampleDate <- as.numeric(amp_object_raw$metadata$SampleID)
 
 amp_object_raw$metadata$SampleSite <- "Aalborg W"
 
 amp_object_initial <- readRDS(here("data", "d_initial_Simon_subset.rds")) %>%
-  amp_filter_samples(SampleSite == "Aalborg W") %>%
-  filter_otus(filter_otus = 0.1)
+  amp_filter_samples(SampleSite == "Aalborg W") #%>%
+  #filter_otus(filter_otus = 0.1)
 
 filter <- amp_object_initial$tax$OTU
 
-amp_object_raw <- amp_subset_taxa(amp_object_raw,tax_vector = filter)
+amp_object_raw <- amp_subset_taxa(amp_object_raw, tax_vector = filter, remove = FALSE)
 
+amp_time_series(amp_object_initial, "SampleDate", normalise = FALSE)
 
 ```
 
@@ -129,7 +135,7 @@ for (site in sample_sites) {
       x = asv_series,
       times = site_time_points,
       #from = 330,
-      to = 360,
+      to = 370,
       type = "period",
       ofac = 30,
       plot = FALSE,
