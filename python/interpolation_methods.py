@@ -23,18 +23,26 @@ def knn_interpolation(samples, time_point_to_complete, K):
     b = samples_dist[K]
 
     time_point_interpolated = None
+    total_kernel_weight = 0.0 # ADDED: to keep track of the sum of weights
 
     for i in range(samples.shape[1]):
         sample = float(samples.columns[i])
         if sample - b <= time_point_to_complete and time_point_to_complete <= sample + b:
             ker_norm = (time_point_to_complete - sample) / b
             kernel = 0.75 * (1 - (ker_norm ** 2))
+            
+            total_kernel_weight += kernel # ADDED: Accumulate the sum of weights
+            
             if type(time_point_interpolated) == np.ndarray:
                 time_point_interpolated += kernel * np.array(samples.iloc[:, i])
             else:
                 time_point_interpolated = kernel * np.array(samples.iloc[:, i])
 
-    sum_time_point = sum(time_point_interpolated)
-    #for i in range(time_point_interpolated.shape[0]):
-        #time_point_interpolated[i] = time_point_interpolated[i] / sum_time_point
-    return time_point_interpolated
+    # ADDED: Divide the weighted sum by the sum of weights to get the average
+    if time_point_interpolated is not None and total_kernel_weight > 0:
+        weighted_average = time_point_interpolated / total_kernel_weight
+    else:
+        weighted_average = np.zeros(samples.shape[0])
+        
+    return weighted_average
+

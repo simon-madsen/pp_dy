@@ -77,6 +77,7 @@ else:
             for t in new_time_points:
                 print(f"  Interpolating for time point: {t:.2f}")
                 interpolated_data[t] = knn_interpolation(irregular_data, t, K)
+                print
 
             # Construct the path for the output file
             output_filepath = os.path.join(output_folder, filename)
