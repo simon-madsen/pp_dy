@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 from interpolation_methods import knn_interpolation
 
 # --- 1. CONFIGURE YOUR SCRIPT ---
@@ -53,38 +54,53 @@ else:
             irregular_data = irregular_data[valid_numeric_columns]
             # -----------------------------------------------------------------
             
-            # Convert column names to float for calculations
-            time_points = [float(col) for col in irregular_data.columns]
+            # Get original time points as floats
+            original_time_points = [float(col) for col in irregular_data.columns]
 
-            if not time_points:
+            if not original_time_points:
                 print(f"  - SKIPPING: No valid time point columns found in {filename}.")
                 continue
 
-            # Determine the new, regularly spaced time points
-            start_time = min(time_points)
-            end_time = max(time_points)
+            # --- MODIFIED LOGIC ---
+            # 1. Determine the target regular time grid
+            start_time = min(original_time_points)
+            end_time = max(original_time_points)
             
-            new_time_points = []
-            current_time = start_time
-            while current_time <= end_time:
-                new_time_points.append(current_time)
-                current_time += new_time_interval
+            # Generate the sequence of regular dates using numpy for precision
+            regular_time_points = np.arange(start_time, end_time + new_time_interval, new_time_interval)
 
-            # Create a new DataFrame to store the interpolated data
-            interpolated_data = pd.DataFrame(index=irregular_data.index)
+            # Create a new DataFrame to store the regularized data
+            regular_data = pd.DataFrame(index=irregular_data.index)
+            
+            # For quick lookups, create a set of the original time points
+            original_times_set = set(original_time_points)
 
-            # For each new time point, perform KNN interpolation
-            for t in new_time_points:
-                print(f"  Interpolating for time point: {t:.2f}")
-                interpolated_data[t] = knn_interpolation(irregular_data, t, K)
-                print
+            # 2. For each point in the regular grid, decide whether to copy or interpolate
+            for t in regular_time_points:
+                # Use a tolerance (isclose) for floating point comparison
+                # to see if a very similar time point already exists.
+                existing_match = next((ot for ot in original_time_points if np.isclose(ot, t)), None)
+
+                if existing_match is not None:
+                    # An original data point exists at this time, so we use it directly.
+                    print(f"  - Using original data for time point: {t:.2f}")
+                    # Find the original column name (as a string) for the float value
+                    original_col_name = str(existing_match)
+                    if original_col_name.endswith('.0'): # Handle cases like '14.0'
+                        original_col_name = original_col_name[:-2]
+                    regular_data[t] = irregular_data[original_col_name]
+                else:
+                    # No data point exists, so we interpolate.
+                    print(f"  - Interpolating for new time point: {t:.2f}")
+                    regular_data[t] = knn_interpolation(irregular_data, t, K)
+
+            # --- END OF MODIFIED LOGIC ---
 
             # Construct the path for the output file
             output_filepath = os.path.join(output_folder, filename)
 
             # Save the new, regularly sampled DataFrame to a .tsv file
-            interpolated_data.to_csv(output_filepath, sep='\t')
+            regular_data.to_csv(output_filepath, sep='\t')
             print(f"Finished processing {filename}. Saved to {output_filepath}")
 
-        print("\nAll files have been interpolated!")
-
+        print("\nAll files have been processed!")
