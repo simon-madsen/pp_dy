@@ -9,7 +9,7 @@ import os
 # TODO: UPDATE THESE PATHS TO MATCH YOUR FILE LOCATIONS
 TIME_SERIES_FILE = '/mnt/c/Users/Simon/Documents/pp_dy/data/abundance_tables_rclr/Randers_abundance_table.tsv'
 PAIRINGS_FILE = '/mnt/c/Users/Simon/Documents/pp_dy/output/wavepal_input/Randers_rclr_abund_norm_off_wavepal.txt'
-OUTPUT_DIR = '/mnt/c/Users/Simon/Documents/pp_dy/output/wavepal_plots/' # A folder to save the output plots
+OUTPUT_DIR = '/mnt/c/Users/Simon/Documents/pp_dy/output/wavepal_timefreq_plots/' # A folder to save the output plots
 
 # --- Main Script ---
 
@@ -38,12 +38,13 @@ def main():
         os.makedirs(OUTPUT_DIR)
     print("Output plots will be saved to '{0}'".format(OUTPUT_DIR))
     
-    theta = np.linspace(time_points[0], time_points[-1], 2000)
+    theta = np.linspace(time_points[0], time_points[-1], 3000)
     percentile = np.array([95.0])
     ANALYSIS_PARAMS = {
         'theta': theta,
-        'w0': 5.5,
-        'permin': 10.,
+        'w0': 6.,
+        'permin': 1/370.,
+        'permax': 1/15.,
         'percentile': percentile
     }
 
@@ -63,6 +64,7 @@ def main():
         
         print("  Analyzing {0}...".format(var_x))
         wp_x = Wavepal(time_points, value_x) 
+        #help(wp_x.timefreq_analysis)
         wp_x.check_data()
         wp_x.choose_trend_degree(pol_degree=-1)
         wp_x.trend_vectors()
