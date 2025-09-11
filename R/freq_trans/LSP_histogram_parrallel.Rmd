@@ -52,7 +52,7 @@ source(here("R", "functions", "rclr_transform.R"))
 # --- 1. Load Data ---
 # Load the ampvis2 object directly from the .rds file
 amp_object_raw <- readRDS(here("data", "d_initial_Simon_subset.rds")) %>%
-  amp_filter_samples(SampleSite == "Aalborg W")
+  amp_filter_samples(SampleSite == "Randers")
 
 # otu_table <- read_tsv(here("data", "interpolated_abundance_tables", "Aalborg W_abundance_table.tsv"))
 # 
@@ -78,7 +78,7 @@ amp_object_raw <- readRDS(here("data", "d_initial_Simon_subset.rds")) %>%
 
 This report identifies all statistically significant periodic components (p < 0.05) for ASVs from different wastewater treatment plants (WWTPs). For each site, the data is first subset and then RCLR-transformed before analysis. The distribution of these periodicities is then visualized in a faceted histogram, allowing for comparison between sites. **This version of the script uses parallel processing to speed up the analysis.**
 
-```{r lsp_and_peak_finding, echo=FALSE, message=FALSE, warning=FALSE}
+```{r lsp_and_peak_finding, echo=TRUE, message=FALSE, warning=FALSE}
 # This chunk performs the LSP analysis for each site and finds all significant peaks.
 
 # --- Setup Parallel Backend ---
@@ -116,7 +116,7 @@ for (site in sample_sites) {
     amp_subset_taxa(tax_vector = taxa_filter) 
   
   # Extract the transposed abundance matrix for LSP
-  site_asv_matrix <- t(site_amp_object_rclr$abund)
+  site_asv_matrix <- t(site_amp_object_rclr$abund["ASV2",])
   
   # Get the time points and convert from Date format to numeric for the lsp function
   site_time_points <- as.numeric(site_amp_object_rclr$metadata$SampleDate -   min(site_amp_object_rclr$metadata$SampleDate))
@@ -138,10 +138,10 @@ for (site in sample_sites) {
       x = asv_series,
       times = site_time_points,
       #from = 330,
-      to = 370,
+      to = 2000,
       type = "period",
       ofac = 30,
-      plot = FALSE,
+      plot = TRUE,
       alpha = 0.05
     )
   }
