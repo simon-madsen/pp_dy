@@ -42,14 +42,15 @@ def main():
     percentile = np.array([95.0])
     ANALYSIS_PARAMS = {
         #'computes_amplitude': False,
-        'n_moments': 20,
-        'freqstep': 0.0001,
+        'D': 750.,
+        'n_moments': 10,
+        'freqstep': 0.00001,
         'percentile': percentile,
         'weighted_WOSA': True,
-        'freqmin': 1/370.,
+        #'freqmin': 1/1000.,
         'freqmax': 1/15.,
         #'WOSA_segments': "all",
-        'freq_min_bound': False
+        #'freq_min_bound': False
     }
 
     for index, row in pairings_df.iterrows():
